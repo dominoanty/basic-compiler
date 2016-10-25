@@ -37,7 +37,7 @@ public:
 class Scanner
 {
     std::string input_string;
-    int index=0;
+    int index;
 
 public:
     Scanner(std::string new_string) : input_string(new_string) {index=0;}
@@ -116,9 +116,13 @@ public:
         if(isalpha(curr_char))
         {
             collected_string+=curr_char;
-            while(isalnum((curr_char = S->get_char())))
+            curr_char = S->get_char();
+            while(isalnum(curr_char) || curr_char == '_')
+            {
                 collected_string += curr_char;
-
+                curr_char = S->get_char();
+            }
+            
             S->rewind();
             return new Token(collected_string, check_keyword(collected_string));
         }
@@ -150,4 +154,3 @@ public:
 
     }
 };
-
