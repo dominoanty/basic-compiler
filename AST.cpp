@@ -2,7 +2,6 @@
 // Created by domino on 29/10/16.
 //
 #include <iostream>
-#include <bits/unique_ptr.h>
 #include <vector>
 
 
@@ -25,7 +24,7 @@ class VariableExprAST : public ExprAST{
     VariableExprAST(std::string name) : Name(name) {}
 };
 class BinaryExprAST : public ExprAST {
-    char Op;
+    std::string Op;
     ExprAST *LHS, *RHS;
 
     public:
@@ -34,9 +33,9 @@ class BinaryExprAST : public ExprAST {
                  : Op(Op), LHS(LHS), RHS(RHS) {}
     void setOp(std::string Op)
     {
-        if(this->Op == ' ')
+        if(this->Op == " ")
         {
-            this->Op = Op[0];
+            this->Op = Op;
         }
     }
     void setRHS(ExprAST* RHS)
@@ -52,7 +51,6 @@ class BinaryExprAST : public ExprAST {
     }
 
 };
-
 class CallExprAST : public ExprAST{
     std::string Callee;
     std::vector<ExprAST*> Args;
@@ -79,4 +77,42 @@ class FunctionAST {
 public:
     FunctionAST(PrototypeAST* Proto,
                 ExprAST* Body) : Proto(Proto), Body(Body) {}
+};
+class StatementAST{
+    public:
+    StatementAST(){}
+};
+class AssignmentStatementAST : public StatementAST{
+    VariableExprAST* LValue;
+    ExprAST* RValue;
+    public:
+    AssignmentStatementAST(VariableExprAST* LValue, ExprAST* RValue) :
+            LValue(LValue), RValue(RValue) {};
+
+};
+class StatementBlockAST :  public StatementAST{
+    std::vector<StatementAST*> Statements;
+
+    public:
+    StatementBlockAST(std::vector<StatementAST*> Statements) : Statements(Statements){}
+};
+class ConditionalStatementAST : public  StatementAST{
+    BinaryExprAST* Condition;
+    StatementBlockAST* Then;
+    StatementBlockAST* Else;
+
+    public:
+    ConditionalStatementAST(BinaryExprAST* Condition,
+                            StatementBlockAST* Then,
+                            StatementBlockAST* Else) :
+                            Condition(Condition), Then(Then), Else(Else) {};
+};
+class LoopStatementAST : public StatementAST{
+    BinaryExprAST* Condition;
+    StatementBlockAST* LoopStatements;
+
+    public:
+    LoopStatementAST(BinaryExprAST* Condition, StatementBlockAST* LoopStatements) :
+            Condition(Condition), StatementBlockAST(LoopStatementAST);
+
 };

@@ -104,7 +104,7 @@ public:
 
             auto new_expr_tree =
                     ParseTermDash(new BinaryExprAST
-                                          (' ', curr_expr_tree, nullptr));
+                                          (" ", curr_expr_tree, nullptr));
 
         }
         else
@@ -121,7 +121,7 @@ public:
             return nullptr;
 
         }
-        auto curr_expr_tree = new BinaryExprAST(' ', LHS, nullptr);
+        auto curr_expr_tree = new BinaryExprAST(" ", LHS, nullptr);
         auto Result = ParseTermDash(curr_expr_tree);
 
    }
@@ -142,7 +142,7 @@ public:
 
             auto new_expr_tree =
                     ParseExprDash(new BinaryExprAST
-                                          (' ', curr_expr_tree, nullptr));
+                                          (" ", curr_expr_tree, nullptr));
 
         }
         else
@@ -157,9 +157,26 @@ public:
             fprintf(stderr, "Error parsing expression");
             return nullptr;
         }
-        auto curr_expr_tree = new BinaryExprAST(' ', LHS, nullptr);
+        auto curr_expr_tree = new BinaryExprAST(" ", LHS, nullptr);
         return ParseExprDash(curr_expr_tree);
 
+    }
+    // C -> E > E
+    ExprAST* ParseCondition() {
+        auto LHS = ParseExpression();
+
+        if(!LHS) {
+            fprintf(stderr, "Error parsing first expression in conditional");
+            return nullptr;
+        }
+
+        if(curr_Token ->get_token_type() != CONDITIONAL){
+            fprintf(stderr, "Error parsing conditional operator");
+            return nullptr;
+        }
+        char Op = curr_Token -> get_token_string()[0];
+        auto RHS = ParseExpression();
+        return new BinaryExprAST(Op, LHS, RHS);
     }
 
     PrototypeAST* ParsePrototype() {
@@ -221,6 +238,96 @@ public:
         return nullptr;
     }
 
+    StatementAST* ParseIfStatement() {
+        get_next_token(); //Consume 'if'
+
+        auto Condition = ParseCondition();
+
+        if(curr_Token -> get_token_string() != "then")
+        {
+            fprintf(stderr, "Error : Couldn't find then after if ");
+        }
+
+        get_next_token(); // Consume 'then'
+
+        StatementAST* ThenStatement;
+        ThenStatement = ParseStatement();
+        fprintf(stderr, "Parsed if statement");
+
+        if(curr_Token -> get_token_string() != "else")
+            return new ConditionalStatementAST(Condition, ThenStatement, nullptr);
+
+        get_next_token(); // Consume else
+
+        StatementAST* ElseStatement;
+        ElseStatement = ParseStatement();
+
+        return new ConditionalStatementAST(Condition, ThenStatement, ElseStatement);
+    }
+
+    StatementAST* ParseAssignmentStatement() {
+        if (curr_Token->get_token_type() != IDENTIFIER) {
+            fprintf(stderr, "Expected identifier on LHS ");
+            return nullptr;
+        }
+        auto LHS = curr_Token->get_token_string();
+        get_next_token(); //consume Identifier
+        if (curr_Token->get_token_string() != "=") {
+            fprintf(stderr, "Expected  = ");
+            return nullptr;
+        }
+        get_next_token(); // consume =
+
+        auto RHS = ParseExpression();
+        if (!RHS) {
+            fprintf(stderr, "could not read rhs ");
+        }
+
+        return new AssignmentStatementAST(new VariableExprAST(LHS), RHS);
+    }
+
+    StatementAST* ParseStatement() {
+       switch(curr_Token -> get_token_type())
+       {
+           case IDENTIFIER: return ParseAssignmentStatement();
+           case KEYWORD:
+               if(curr_Token -> get_token_string() == "begin")
+                   return ParseBlockStatement();
+               else if(curr_Token -> get_token_string() == "if")
+                   return ParseIfStatement();
+               else if(curr_Token -> get_token_string() == "while")
+                   return ParseLoopStatement();
+               else if( curr_Token -> get_token_string() == "call")
+                    return ParseFunctionCallStatement();
+               else
+               {
+                   fprintf(stderr, "Could not recognize statement");
+               }
+       }
+    }
+    void HandleIfStatement()
+    {
+        if(ParseIfStatement())
+        {
+            fprintf(stderr, "Parsed an if statement");
+        }
+        else
+        {
+            get_next_token();
+        }
+    }
+    void HandleLoopStatement()
+    {
+        if(ParseIfStatements())
+        {
+            fprintf(stderr, "Parsed an if statement");
+        }
+        else
+        {
+            get_next_token();
+        }
+    }
+
     void HandleDefinition()
     {
        if(ParseDefinition()){
@@ -253,7 +360,12 @@ public:
                 case KEYWORD:
                     if(curr_Token ->get_token_string() == "def")
                         HandleDefinition();
+                    else if(curr_Token -> get_token_string() == "if")
+                        HandleIfStatements();
+                    else if(curr_Token -> get_token_string() == "do")
+                        HandleLoopStatements();
                     break;
+
                 default:
                     if(curr_Token -> get_token_string() == ";")
                         get_next_token();
