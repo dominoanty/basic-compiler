@@ -122,7 +122,7 @@ public:
 
         }
         auto curr_expr_tree = new BinaryExprAST(' ', LHS, nullptr);
-        auto Result = ParseExprDash(curr_expr_tree);
+        auto Result = ParseTermDash(curr_expr_tree);
 
    }
     //PARSE EXPRESSIONS
@@ -169,23 +169,25 @@ public:
         }
 
         std::string fnName = curr_Token ->get_token_string();
+        get_next_token(); //consume identifier
 
         if(curr_Token -> get_token_string() != "(") {
             fprintf(stderr, "Expected arguments list");
             return nullptr;
         }
+        get_next_token(); //consume (
 
         std::vector<std::string> argument_names;
-        get_next_token();
         do{
             argument_names.push_back(curr_Token->get_token_string());
             get_next_token(); //consume identfier
 
-            if(curr_Token -> get_token_string() != "," ||
-                    curr_Token -> get_token_string() != ")") {
+            if(curr_Token -> get_token_string() != "," && curr_Token -> get_token_string() != ")") {
                 fprintf(stderr, "Expected multiple arguments or end of arguments list");
                 return nullptr;
             }
+            if(curr_Token ->get_token_string() == ",")
+                get_next_token();
 
         }while(curr_Token -> get_token_type() == IDENTIFIER);
 
@@ -194,7 +196,7 @@ public:
              return nullptr;
          }
 
-        get_next_token();
+        get_next_token(); // consume )
         return new PrototypeAST(fnName, argument_names);
     }
 
