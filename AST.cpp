@@ -22,13 +22,14 @@ class VariableExprAST : public ExprAST{
 
     public:
     VariableExprAST(std::string name) : Name(name) {}
+    std::string getName(){return Name;}
 };
 class BinaryExprAST : public ExprAST {
     std::string Op;
     ExprAST *LHS, *RHS;
 
     public:
-    BinaryExprAST(char Op, ExprAST* LHS,
+    BinaryExprAST(std::string Op, ExprAST* LHS,
                            ExprAST* RHS)
                  : Op(Op), LHS(LHS), RHS(RHS) {}
     void setOp(std::string Op)
@@ -98,21 +99,21 @@ class StatementBlockAST :  public StatementAST{
 };
 class ConditionalStatementAST : public  StatementAST{
     BinaryExprAST* Condition;
-    StatementBlockAST* Then;
-    StatementBlockAST* Else;
+    StatementAST* Then;
+    StatementAST* Else;
 
     public:
     ConditionalStatementAST(BinaryExprAST* Condition,
-                            StatementBlockAST* Then,
-                            StatementBlockAST* Else) :
+                            StatementAST* Then,
+                            StatementAST* Else) :
                             Condition(Condition), Then(Then), Else(Else) {};
 };
 class LoopStatementAST : public StatementAST{
     BinaryExprAST* Condition;
-    StatementBlockAST* LoopStatements;
+    StatementAST* LoopStatements;
 
     public:
-    LoopStatementAST(BinaryExprAST* Condition, StatementBlockAST* LoopStatements) :
-            Condition(Condition), StatementBlockAST(LoopStatementAST);
+    LoopStatementAST(BinaryExprAST* Condition, StatementAST* LoopStatements) :
+            Condition(Condition), LoopStatements(LoopStatements){};
 
 };

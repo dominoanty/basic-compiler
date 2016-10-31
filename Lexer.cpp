@@ -173,7 +173,8 @@ public:
                 collected_string+=curr_char;
             else
                 S->rewind();
-            return new Token(collected_string, SYMBOL);
+
+            return new Token(collected_string, CONDITIONAL);
         }
 
         //If EOF, return an EOF token

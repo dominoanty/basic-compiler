@@ -82,9 +82,8 @@ public:
                     return result;
                 }
             default:
-
-                fprintf(stderr, "Expected number identifier or brackets but got %s :: %s",
-                        curr_Token->get_token_string(), curr_Token -> get_token_type());
+                fprintf(stderr, "Expected number identifier or brackets but got ");
+                std::cout<<curr_Token->get_token_string() << "::" << curr_Token -> get_token_type();
         }
     }
     // PARSE TERMS
@@ -162,7 +161,7 @@ public:
 
     }
     // C -> E > E
-    ExprAST* ParseCondition() {
+    BinaryExprAST* ParseCondition() {
         auto LHS = ParseExpression();
 
         if(!LHS) {
@@ -174,7 +173,9 @@ public:
             fprintf(stderr, "Error parsing conditional operator");
             return nullptr;
         }
-        char Op = curr_Token -> get_token_string()[0];
+        std::string Op = curr_Token -> get_token_string();
+
+        get_next_token(); // Consume operator
         auto RHS = ParseExpression();
         return new BinaryExprAST(Op, LHS, RHS);
     }
@@ -255,7 +256,16 @@ public:
         fprintf(stderr, "Parsed if statement");
 
         if(curr_Token -> get_token_string() != "else")
-            return new ConditionalStatementAST(Condition, ThenStatement, nullptr);
+            if(curr_Token -> get_token_string() == "end")
+            {
+                get_next_token(); // Consume end
+                return new ConditionalStatementAST(Condition, ThenStatement, nullptr);
+            }
+            else
+            {
+                fprintf(stderr, "Expected else or end");
+                return nullptr;
+            }
 
         get_next_token(); // Consume else
 
@@ -263,6 +273,26 @@ public:
         ElseStatement = ParseStatement();
 
         return new ConditionalStatementAST(Condition, ThenStatement, ElseStatement);
+    }
+
+    StatementAST* ParseLoopStatement() {
+        get_next_token(); //Consume 'while'
+
+        auto Condition = ParseCondition();
+
+        if(curr_Token -> get_token_string() != "do")
+        {
+            fprintf(stderr, "Error : Couldn't find do after while ");
+        }
+
+        get_next_token(); // Consume 'do'
+
+        StatementAST* ThenStatement;
+        ThenStatement = ParseStatement();
+        fprintf(stderr, "Parsed do statement");
+
+        return new LoopStatementAST(Condition, ThenStatement);
+
     }
 
     StatementAST* ParseAssignmentStatement() {
@@ -286,6 +316,34 @@ public:
         return new AssignmentStatementAST(new VariableExprAST(LHS), RHS);
     }
 
+    StatementAST* ParseBlockStatement()
+    {
+        if(curr_Token -> get_token_string() != "begin")
+        {
+            fprintf(stderr, "Expected begin ");
+            return nullptr;
+        }
+
+        get_next_token(); // Consume 'begin'
+
+        std::vector<StatementAST*> StatementList;
+        while(curr_Token -> get_token_string() != "end")
+        {
+            StatementList.push_back(ParseStatement());
+        }
+
+        if(curr_Token -> get_token_string()!= "end"){
+            fprintf(stderr, "Expected end");
+        }
+
+        get_next_token(); // cosume end
+        return new StatementBlockAST(StatementList);
+    }
+
+    StatementAST* ParseCallStatement(){
+
+    }
+
     StatementAST* ParseStatement() {
        switch(curr_Token -> get_token_type())
        {
@@ -298,7 +356,7 @@ public:
                else if(curr_Token -> get_token_string() == "while")
                    return ParseLoopStatement();
                else if( curr_Token -> get_token_string() == "call")
-                    return ParseFunctionCallStatement();
+                    return ParseCallStatement();
                else
                {
                    fprintf(stderr, "Could not recognize statement");
@@ -318,7 +376,7 @@ public:
     }
     void HandleLoopStatement()
     {
-        if(ParseIfStatements())
+        if(ParseLoopStatement())
         {
             fprintf(stderr, "Parsed an if statement");
         }
@@ -361,9 +419,9 @@ public:
                     if(curr_Token ->get_token_string() == "def")
                         HandleDefinition();
                     else if(curr_Token -> get_token_string() == "if")
-                        HandleIfStatements();
-                    else if(curr_Token -> get_token_string() == "do")
-                        HandleLoopStatements();
+                        HandleIfStatement();
+                    else if(curr_Token -> get_token_string() == "while")
+                        HandleLoopStatement();
                     break;
 
                 default:
