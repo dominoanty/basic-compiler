@@ -32,14 +32,14 @@ class BinaryExprAST : public ExprAST {
     BinaryExprAST(char Op, ExprAST* LHS,
                            ExprAST* RHS)
                  : Op(Op), LHS(LHS), RHS(RHS) {}
-    void setOp(char Op)
+    void setOp(std::string Op)
     {
-        if(this->Op == '')
+        if(this->Op == ' ')
         {
-            this->Op = Op;
+            this->Op = Op[0];
         }
     }
-    void setRHS(ExprAST* Op)
+    void setRHS(ExprAST* RHS)
     {
         if(this->RHS == nullptr)
         {

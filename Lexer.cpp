@@ -19,7 +19,7 @@ public:
             : token_string(token_string), token_type(token_type) {
         if(token_type == NUMBER)
         {
-            token_val = atof(token_string);
+            token_val = std::stod(token_string);
         }
     }
     int equals(Token T)

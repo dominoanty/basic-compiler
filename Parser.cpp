@@ -18,7 +18,6 @@ public:
         if(curr_Token->get_token_type() != EOF_TOKEN)
             curr_Token = L->get_token();
     }
-    ExprAST* ParseExpression();
 
     //Parse Numbers and eat the corresponding token
     ExprAST* ParseNumberExpr(){
@@ -70,17 +69,22 @@ public:
             case NUMBER:
                 return ParseNumberExpr();
             case SYMBOL:
-                if(curr_Token -> get_token_string() == '(') {
+                if(curr_Token -> get_token_string() == "(") {
                     get_next_token(); // Consume (
                     auto result = ParseExpression(); // Generate expression tree
-                    if(curr_Token -> get_token_string() != '(')
-                        fprintf(stderr,"Error detected");
+                    if(curr_Token -> get_token_string() != ")")
+                    {
+                        fprintf(stderr,"Error parsing between paranthes");
+                        return nullptr;
+                    }
                     else
                         get_next_token(); // Consume )
                     return result;
                 }
             default:
-                fprintf(stderr, "Unkown token");
+
+                fprintf(stderr, "Expected number identifier or brackets but got %s :: %s",
+                        curr_Token->get_token_string(), curr_Token -> get_token_type());
         }
     }
     // PARSE TERMS
@@ -91,15 +95,16 @@ public:
         if(curr_Token -> get_token_string() == "*" ||
                 curr_Token -> get_token_string() == "/")
         {
-            auto Op = get_next_token(); //Consume the operator
+            auto Op = curr_Token -> get_token_string();
             curr_expr_tree->setOp(Op);
+            get_next_token(); //Consume operator
 
             auto oldRHS = ParseFactor();
             curr_expr_tree->setRHS(oldRHS);
 
             auto new_expr_tree =
                     ParseTermDash(new BinaryExprAST
-                                          ('', curr_expr_tree, nullptr));
+                                          (' ', curr_expr_tree, nullptr));
 
         }
         else
@@ -111,11 +116,15 @@ public:
    ExprAST* ParseTerm(){
         auto LHS = ParseFactor();
         if(!LHS)
+        {
             fprintf(stderr, "Error parsing");
-        auto curr_expr_tree = new BinaryExprAST('', LHS, nullptr);
-        auto Result = ParseExprDash(ExprAST* curr_expr_tree);
+            return nullptr;
 
-    }
+        }
+        auto curr_expr_tree = new BinaryExprAST(' ', LHS, nullptr);
+        auto Result = ParseExprDash(curr_expr_tree);
+
+   }
     //PARSE EXPRESSIONS
     //E  -> TE'
     //E' -> +TE' | -TE' | epsilon
@@ -124,15 +133,16 @@ public:
         if(curr_Token -> get_token_string() == "+" ||
                 curr_Token -> get_token_string() == "-")
         {
-            auto Op = get_next_token(); //Consume the operator
+            auto Op = curr_Token -> get_token_string();
             curr_expr_tree->setOp(Op);
+            get_next_token(); //Consume the operator
 
             auto oldRHS = ParseTerm();
             curr_expr_tree->setRHS(oldRHS);
 
             auto new_expr_tree =
                     ParseExprDash(new BinaryExprAST
-                                          ('', curr_expr_tree, nullptr));
+                                          (' ', curr_expr_tree, nullptr));
 
         }
         else
@@ -143,12 +153,71 @@ public:
     ExprAST* ParseExpression(){
         auto LHS = ParseTerm();
         if(!LHS)
-            fprintf(stderr, "Error parsing");
-        auto curr_expr_tree = new BinaryExprAST('', LHS, nullptr);
-        return ParseExprDash(ExprAST* curr_expr_tree);
+        {
+            fprintf(stderr, "Error parsing expression");
+            return nullptr;
+        }
+        auto curr_expr_tree = new BinaryExprAST(' ', LHS, nullptr);
+        return ParseExprDash(curr_expr_tree);
 
     }
 
+    PrototypeAST* ParsePrototype() {
+        if(curr_Token -> get_token_type() != IDENTIFIER) {
+            fprintf(stderr, "Expected function name");
+            return nullptr;
+        }
+
+        std::string fnName = curr_Token ->get_token_string();
+
+        if(curr_Token -> get_token_string() != "(") {
+            fprintf(stderr, "Expected arguments list");
+            return nullptr;
+        }
+
+        std::vector<std::string> argument_names;
+        get_next_token();
+        do{
+            argument_names.push_back(curr_Token->get_token_string());
+            get_next_token(); //consume identfier
+
+            if(curr_Token -> get_token_string() != "," ||
+                    curr_Token -> get_token_string() != ")") {
+                fprintf(stderr, "Expected multiple arguments or end of arguments list");
+                return nullptr;
+            }
+
+        }while(curr_Token -> get_token_type() == IDENTIFIER);
+
+         if(curr_Token -> get_token_string() != ")") {
+             fprintf(stderr, "Expected )");
+             return nullptr;
+         }
+
+        get_next_token();
+        return new PrototypeAST(fnName, argument_names);
+    }
+
+    FunctionAST* ParseDefinition() {
+        get_next_token(); //Consume def
+        auto Proto = ParsePrototype();
+        if (!Proto)
+            return nullptr;
+
+        if (auto E = ParseExpression())
+            return new FunctionAST(Proto, E);
+        return nullptr;
+    }
+
+    FunctionAST* ParseTopLevelExpr() {
+        if (auto E = ParseExpression()) {
+            // Make an anonymous proto.
+            auto Proto = new PrototypeAST("__anon_expr",
+                                                         std::vector<std::string>());
+            return new FunctionAST(Proto, E);
+        }
+        return nullptr;
+    }
 
     void HandleDefinition()
     {
@@ -184,7 +253,7 @@ public:
                         HandleDefinition();
                     break;
                 default:
-                    if(curr_Token -> get_token_string() == ';')
+                    if(curr_Token -> get_token_string() == ";")
                         get_next_token();
                     else
                         HandleTopLevelExpression();
