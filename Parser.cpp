@@ -153,7 +153,7 @@ public:
         auto LHS = ParseTerm();
         if(!LHS)
         {
-            fprintf(stderr, "Error parsing expression");
+            fprintf(stderr, "\nError parsing expression");
             return nullptr;
         }
         auto curr_expr_tree = new BinaryExprAST(" ", LHS, nullptr);
@@ -165,12 +165,12 @@ public:
         auto LHS = ParseExpression();
 
         if(!LHS) {
-            fprintf(stderr, "Error parsing first expression in conditional");
+            fprintf(stderr, "\nError parsing first expression in conditional");
             return nullptr;
         }
 
         if(curr_Token ->get_token_type() != CONDITIONAL){
-            fprintf(stderr, "Error parsing conditional operator");
+            fprintf(stderr, "\nError parsing conditional operator");
             return nullptr;
         }
         std::string Op = curr_Token -> get_token_string();
@@ -182,7 +182,7 @@ public:
 
     PrototypeAST* ParsePrototype() {
         if(curr_Token -> get_token_type() != IDENTIFIER) {
-            fprintf(stderr, "Expected function name");
+            fprintf(stderr, "\nExpected function name");
             return nullptr;
         }
 
@@ -190,7 +190,7 @@ public:
         get_next_token(); //consume identifier
 
         if(curr_Token -> get_token_string() != "(") {
-            fprintf(stderr, "Expected arguments list");
+            fprintf(stderr, "\nExpected arguments list");
             return nullptr;
         }
         get_next_token(); //consume (
@@ -201,7 +201,7 @@ public:
             get_next_token(); //consume identfier
 
             if(curr_Token -> get_token_string() != "," && curr_Token -> get_token_string() != ")") {
-                fprintf(stderr, "Expected multiple arguments or end of arguments list");
+                fprintf(stderr, "\nExpected multiple arguments or end of arguments list");
                 return nullptr;
             }
             if(curr_Token ->get_token_string() == ",")
@@ -210,7 +210,7 @@ public:
         }while(curr_Token -> get_token_type() == IDENTIFIER);
 
          if(curr_Token -> get_token_string() != ")") {
-             fprintf(stderr, "Expected )");
+             fprintf(stderr, "\nExpected )");
              return nullptr;
          }
 
@@ -246,14 +246,13 @@ public:
 
         if(curr_Token -> get_token_string() != "then")
         {
-            fprintf(stderr, "Error : Couldn't find then after if ");
+            fprintf(stderr, "\nError : Couldn't find then after if ");
         }
 
         get_next_token(); // Consume 'then'
 
         StatementAST* ThenStatement;
         ThenStatement = ParseStatement();
-        fprintf(stderr, "Parsed if statement");
 
         if(curr_Token -> get_token_string() != "else")
             if(curr_Token -> get_token_string() == "end")
@@ -263,7 +262,7 @@ public:
             }
             else
             {
-                fprintf(stderr, "Expected else or end");
+                fprintf(stderr, "\nExpected else or end");
                 return nullptr;
             }
 
@@ -282,14 +281,14 @@ public:
 
         if(curr_Token -> get_token_string() != "do")
         {
-            fprintf(stderr, "Error : Couldn't find do after while ");
+            fprintf(stderr, "\nError : Couldn't find do after while ");
         }
 
         get_next_token(); // Consume 'do'
 
         StatementAST* ThenStatement;
         ThenStatement = ParseStatement();
-        fprintf(stderr, "Parsed do statement");
+        fprintf(stderr, "\nParsed do statement");
 
         return new LoopStatementAST(Condition, ThenStatement);
 
@@ -297,20 +296,20 @@ public:
 
     StatementAST* ParseAssignmentStatement() {
         if (curr_Token->get_token_type() != IDENTIFIER) {
-            fprintf(stderr, "Expected identifier on LHS ");
+            fprintf(stderr, "\nExpected identifier on LHS ");
             return nullptr;
         }
         auto LHS = curr_Token->get_token_string();
         get_next_token(); //consume Identifier
         if (curr_Token->get_token_string() != "=") {
-            fprintf(stderr, "Expected  = ");
+            fprintf(stderr, "\nExpected  = ");
             return nullptr;
         }
         get_next_token(); // consume =
 
         auto RHS = ParseExpression();
         if (!RHS) {
-            fprintf(stderr, "could not read rhs ");
+            fprintf(stderr, "\ncould not read rhs ");
         }
 
         return new AssignmentStatementAST(new VariableExprAST(LHS), RHS);
@@ -320,7 +319,7 @@ public:
     {
         if(curr_Token -> get_token_string() != "begin")
         {
-            fprintf(stderr, "Expected begin ");
+            fprintf(stderr, "\nExpected begin ");
             return nullptr;
         }
 
@@ -335,6 +334,7 @@ public:
         if(curr_Token -> get_token_string()!= "end"){
             fprintf(stderr, "Expected end");
         }
+        fprintf(stderr, "\nParsed block statement ");
 
         get_next_token(); // cosume end
         return new StatementBlockAST(StatementList);
@@ -365,9 +365,11 @@ public:
     }
     void HandleIfStatement()
     {
-        if(ParseIfStatement())
+        ConditionalStatementAST* Result = (ConditionalStatementAST*) ParseIfStatement();
+        if(Result)
         {
             fprintf(stderr, "Parsed an if statement");
+            Result->print();
         }
         else
         {
