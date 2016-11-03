@@ -5,7 +5,7 @@
 #define KEYWORD -3
 #define NUMBER -4
 #define SYMBOL -5
-
+#define CONDITIONAL -6
 
 class Token
 {
@@ -162,6 +162,19 @@ public:
 
             return new Token(collected_string, NUMBER);
 
+        }
+
+        // Collect conditional operators
+        if(curr_char == '>' || curr_char == '<')
+        {
+            collected_string += curr_char;
+            curr_char = S->get_char();
+            if(curr_char == '=')
+                collected_string+=curr_char;
+            else
+                S->rewind();
+
+            return new Token(collected_string, CONDITIONAL);
         }
 
         //If EOF, return an EOF token
