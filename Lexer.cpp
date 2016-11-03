@@ -5,20 +5,28 @@
 #define KEYWORD -3
 #define NUMBER -4
 #define SYMBOL -5
-
+#define CONDITIONAL -6
 
 class Token
 {
     std::string token_string;
+    double token_val;
     int token_type;
 
 public:
 
-    Token(std::string token_string, int token_type) : token_string(token_string), token_type(token_type) {}
-
+    Token(std::string token_string, int token_type)
+            : token_string(token_string), token_type(token_type) {
+        if(token_type == NUMBER)
+        {
+            token_val = std::stod(token_string);
+        }
+    }
     int equals(Token T)
     {
-        if(this->token_string == T.token_string && this->token_type == T.token_type)
+
+        if((this->token_string == T.token_string || this->token_val == T.token_val)
+           && this->token_type == T.token_type)
             return 1;
         return 0;
     }
@@ -30,6 +38,11 @@ public:
     {
         return token_type;
     }
+    double get_token_val()
+    {
+        return token_val;
+    }
+
 
 }Token_EOF("EOF", EOF_TOKEN);
 
@@ -96,8 +109,16 @@ public:
 
     int check_keyword(std::string test_string)
     {
-        if(test_string == "if"          ||
-           test_string == "for"    ||
+        if(test_string == "if"        ||
+           test_string == "then"      ||
+           test_string == "while"     ||
+           test_string == "do"        ||
+           test_string == "const"     ||
+           test_string == "var"       ||
+           test_string == "procedure" ||
+           test_string == "begin"     ||
+           test_string == "end"       ||
+           test_string == "call"      ||
            test_string == "def" )
            return KEYWORD;
         return IDENTIFIER;
@@ -141,6 +162,19 @@ public:
 
             return new Token(collected_string, NUMBER);
 
+        }
+
+        // Collect conditional operators
+        if(curr_char == '>' || curr_char == '<')
+        {
+            collected_string += curr_char;
+            curr_char = S->get_char();
+            if(curr_char == '=')
+                collected_string+=curr_char;
+            else
+                S->rewind();
+
+            return new Token(collected_string, CONDITIONAL);
         }
 
         //If EOF, return an EOF token
