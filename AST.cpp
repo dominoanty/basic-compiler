@@ -4,12 +4,21 @@
 #include <iostream>
 #include <vector>
 
+class Node{
+    std::string Type;
+public:
+    virtual ~Node(){}
+    virtual void print(){
+        std::cout<<"Blank node";
+    }
+    void set_type(std::string Type) { this->Type = Type;};
+};
 
-class ExprAST{
+class ExprAST {
     public:
     virtual ~ExprAST(){}
     virtual void print(){
-        std::cout<<"Blank";
+        std::cout<<"Blank expression";
     }
 };
 
@@ -103,19 +112,23 @@ public:
                  std::vector<std::string> Args)
             : Name(Name), Args(std::move(Args)) {}
 };
-class FunctionAST {
-    PrototypeAST* Proto;
-    ExprAST* Body;
 
-public:
-    FunctionAST(PrototypeAST* Proto,
-                ExprAST* Body) : Proto(Proto), Body(Body) {}
-};
-
-class StatementAST{
+class StatementAST : public Node{
     public:
     StatementAST(){}
     virtual void print(){std::cout<<"Blank statement";}
+};
+
+class FunctionAST : public Node{
+    PrototypeAST* Proto;
+    StatementAST* Body;
+
+public:
+    FunctionAST(PrototypeAST* Proto,
+                StatementAST* Body) : Proto(Proto), Body(Body) {}
+    void print(){
+        Body->print();
+    }
 };
 
 class AssignmentStatementAST : public StatementAST{

@@ -6,6 +6,7 @@
 class Parser{
     Lexer *L;
     Token *curr_Token;
+    std::vector<Node*> TopLevelNodes;
 
 public:
 
@@ -25,7 +26,6 @@ public:
         get_next_token(); //Consume the number
         return Result;
     }
-
 
     //Parse identifiers and function calls
     ExprAST* ParseIdentifierExpr()
@@ -224,16 +224,18 @@ public:
         if (!Proto)
             return nullptr;
 
-        if (auto E = ParseExpression())
+        auto E = ParseStatement();
+
+        if(E)
             return new FunctionAST(Proto, E);
         return nullptr;
     }
 
-    FunctionAST* ParseTopLevelExpr() {
-        if (auto E = ParseExpression()) {
+    FunctionAST* ParseTopLevelStatement() {
+
+        if (auto E = ParseBlockStatement()) {
             // Make an anonymous proto.
-            auto Proto = new PrototypeAST("__anon_expr",
-                                                         std::vector<std::string>());
+            auto Proto = new PrototypeAST("__main_st", std::vector<std::string>());
             return new FunctionAST(Proto, E);
         }
         return nullptr;
@@ -242,7 +244,22 @@ public:
     StatementAST* ParseIfStatement() {
         get_next_token(); //Consume 'if'
 
+
+        if(curr_Token -> get_token_string() != "(")
+        {
+            fprintf(stderr, "Error : Expected ( after if ");
+            return nullptr;
+        }
+        get_next_token(); // Consume (
+
         auto Condition = ParseCondition();
+
+        if(curr_Token -> get_token_string() != ")")
+        {
+            fprintf(stderr, "Error : Expected ) after condition ");
+            return nullptr;
+        }
+        get_next_token(); //consume )
 
         if(curr_Token -> get_token_string() != "then")
         {
@@ -271,13 +288,34 @@ public:
         StatementAST* ElseStatement;
         ElseStatement = ParseStatement();
 
+        if(curr_Token -> get_token_string() != "end") {
+            fprintf(stderr, "Expected end at the end of else block");
+            return nullptr;
+        }
+        get_next_token(); //Consume end
         return new ConditionalStatementAST(Condition, ThenStatement, ElseStatement);
     }
 
     StatementAST* ParseLoopStatement() {
         get_next_token(); //Consume 'while'
 
+        if(curr_Token -> get_token_string() != "(")
+        {
+            fprintf(stderr, "Error : Expected ( after condition ");
+            return nullptr;
+        }
+        get_next_token(); //consume (
+
         auto Condition = ParseCondition();
+
+
+        if(curr_Token -> get_token_string() != ")")
+        {
+            fprintf(stderr, "Error : Expected ) after condition ");
+            return nullptr;
+        }
+        get_next_token(); //consume )
+
 
         if(curr_Token -> get_token_string() != "do")
         {
@@ -363,34 +401,14 @@ public:
                }
        }
     }
-    void HandleIfStatement()
-    {
-        ConditionalStatementAST* Result = (ConditionalStatementAST*) ParseIfStatement();
-        if(Result)
-        {
-            fprintf(stderr, "Parsed an if statement");
-            Result->print();
-        }
-        else
-        {
-            get_next_token();
-        }
-    }
-    void HandleLoopStatement()
-    {
-        if(ParseLoopStatement())
-        {
-            fprintf(stderr, "Parsed an if statement");
-        }
-        else
-        {
-            get_next_token();
-        }
-    }
 
-    void HandleDefinition()
-    {
-       if(ParseDefinition()){
+
+    void HandleDefinition() {
+       FunctionAST* Result = (FunctionAST*) ParseDefinition();
+       if(Result){
+           Result->set_type("func_def");
+           Result->print();
+           TopLevelNodes.push_back(Result);
            fprintf(stderr, "Parsed a function definiton\n");
        }
        else
@@ -399,9 +417,13 @@ public:
        }
     }
 
-    void HandleTopLevelExpression(){
-        if(ParseTopLevelExpr()){
-            fprintf(stderr, "Parsed a top level expr\n");
+    void HandleMain(){
+        FunctionAST* Result = (FunctionAST*) ParseTopLevelStatement();
+        if(Result){
+            Result->set_type("main_func");
+            Result->print();
+            TopLevelNodes.push_back(Result);
+            fprintf(stderr, "Parsed main \n");
         }
         else
         {
@@ -420,17 +442,18 @@ public:
                 case KEYWORD:
                     if(curr_Token ->get_token_string() == "def")
                         HandleDefinition();
-                    else if(curr_Token -> get_token_string() == "if")
-                        HandleIfStatement();
-                    else if(curr_Token -> get_token_string() == "while")
-                        HandleLoopStatement();
+                    else if(curr_Token -> get_token_string() == "begin")
+                        HandleMain();
                     break;
 
                 default:
                     if(curr_Token -> get_token_string() == ";")
                         get_next_token();
                     else
-                        HandleTopLevelExpression();
+                    {
+                        fprintf(stderr,"Unexpected input");
+                        exit(0);
+                    }
                     break;
             }
         }
