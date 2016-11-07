@@ -7,6 +7,8 @@ class Parser{
     Lexer *L;
     Token *curr_Token;
     std::vector<Node*> TopLevelNodes;
+    CodeGenContext context;
+
 
 public:
 
@@ -84,6 +86,7 @@ public:
             default:
                 fprintf(stderr, "Expected number identifier or brackets but got ");
                 std::cout<<curr_Token->get_token_string() << "::" << curr_Token -> get_token_type();
+                return nullptr;
         }
     }
     // PARSE TERMS
@@ -104,6 +107,7 @@ public:
             auto new_expr_tree =
                     ParseTermDash(new BinaryExprAST
                                           (" ", curr_expr_tree, nullptr));
+            return new_expr_tree;
 
         }
         else
@@ -120,8 +124,10 @@ public:
             return nullptr;
 
         }
+       LHS->print();
         auto curr_expr_tree = new BinaryExprAST(" ", LHS, nullptr);
         auto Result = ParseTermDash(curr_expr_tree);
+       return Result;
 
    }
     //PARSE EXPRESSIONS
@@ -142,6 +148,7 @@ public:
             auto new_expr_tree =
                     ParseExprDash(new BinaryExprAST
                                           (" ", curr_expr_tree, nullptr));
+            return new_expr_tree;
 
         }
         else
@@ -195,9 +202,10 @@ public:
         }
         get_next_token(); //consume (
 
-        std::vector<std::string> argument_names;
-        do{
-            argument_names.push_back(curr_Token->get_token_string());
+        std::vector<VariableDeclarationAST*> arguments;
+
+        while(curr_Token -> get_token_type() == IDENTIFIER){
+            arguments.push_back( new VariableDeclarationAST( new VariableExprAST(curr_Token->get_token_string())));
             get_next_token(); //consume identfier
 
             if(curr_Token -> get_token_string() != "," && curr_Token -> get_token_string() != ")") {
@@ -207,7 +215,7 @@ public:
             if(curr_Token ->get_token_string() == ",")
                 get_next_token();
 
-        }while(curr_Token -> get_token_type() == IDENTIFIER);
+        }
 
          if(curr_Token -> get_token_string() != ")") {
              fprintf(stderr, "\nExpected )");
@@ -215,16 +223,16 @@ public:
          }
 
         get_next_token(); // consume )
-        return new PrototypeAST(fnName, argument_names);
+        return new PrototypeAST(fnName, arguments);
     }
 
     FunctionAST* ParseDefinition() {
         get_next_token(); //Consume def
-        auto Proto = ParsePrototype();
+        PrototypeAST* Proto = (PrototypeAST*) ParsePrototype();
         if (!Proto)
             return nullptr;
 
-        auto E = ParseStatement();
+        StatementBlockAST* E = (StatementBlockAST*) ParseStatement();
 
         if(E)
             return new FunctionAST(Proto, E);
@@ -233,9 +241,9 @@ public:
 
     FunctionAST* ParseTopLevelStatement() {
 
-        if (auto E = ParseBlockStatement()) {
+        if (StatementBlockAST* E = (StatementBlockAST*) ParseBlockStatement()) {
             // Make an anonymous proto.
-            auto Proto = new PrototypeAST("__main_st", std::vector<std::string>());
+            auto Proto = new PrototypeAST("__main_st", std::vector<VariableDeclarationAST*>());
             return new FunctionAST(Proto, E);
         }
         return nullptr;
@@ -264,6 +272,7 @@ public:
         if(curr_Token -> get_token_string() != "then")
         {
             fprintf(stderr, "\nError : Couldn't find then after if ");
+            return nullptr;
         }
 
         get_next_token(); // Consume 'then'
@@ -272,27 +281,14 @@ public:
         ThenStatement = ParseStatement();
 
         if(curr_Token -> get_token_string() != "else")
-            if(curr_Token -> get_token_string() == "end")
-            {
-                get_next_token(); // Consume end
-                return new ConditionalStatementAST(Condition, ThenStatement, nullptr);
-            }
-            else
-            {
-                fprintf(stderr, "\nExpected else or end");
-                return nullptr;
-            }
+            return new ConditionalStatementAST(Condition, ThenStatement, nullptr);
+
 
         get_next_token(); // Consume else
 
         StatementAST* ElseStatement;
         ElseStatement = ParseStatement();
 
-        if(curr_Token -> get_token_string() != "end") {
-            fprintf(stderr, "Expected end at the end of else block");
-            return nullptr;
-        }
-        get_next_token(); //Consume end
         return new ConditionalStatementAST(Condition, ThenStatement, ElseStatement);
     }
 
@@ -301,7 +297,8 @@ public:
 
         if(curr_Token -> get_token_string() != "(")
         {
-            fprintf(stderr, "Error : Expected ( after condition ");
+            fprintf(stderr, "Error : Eopected ( after condition ");
+
             return nullptr;
         }
         get_next_token(); //consume (
@@ -320,6 +317,7 @@ public:
         if(curr_Token -> get_token_string() != "do")
         {
             fprintf(stderr, "\nError : Couldn't find do after while ");
+            return nullptr;
         }
 
         get_next_token(); // Consume 'do'
@@ -337,8 +335,7 @@ public:
             fprintf(stderr, "\nExpected identifier on LHS ");
             return nullptr;
         }
-        auto LHS = curr_Token->get_token_string();
-        get_next_token(); //consume Identifier
+        VariableExprAST* LHS = (VariableExprAST*) ParseIdentifierExpr();
         if (curr_Token->get_token_string() != "=") {
             fprintf(stderr, "\nExpected  = ");
             return nullptr;
@@ -348,9 +345,10 @@ public:
         auto RHS = ParseExpression();
         if (!RHS) {
             fprintf(stderr, "\ncould not read rhs ");
+            return nullptr;
         }
 
-        return new AssignmentStatementAST(new VariableExprAST(LHS), RHS);
+        return new AssignmentStatementAST(LHS, RHS);
     }
 
     StatementAST* ParseBlockStatement()
@@ -364,7 +362,7 @@ public:
         get_next_token(); // Consume 'begin'
 
         std::vector<StatementAST*> StatementList;
-        while(curr_Token -> get_token_string() != "end")
+        while(curr_Token -> get_token_string() != "end" && curr_Token -> get_token_type() != EOF)
         {
             StatementList.push_back(ParseStatement());
         }
@@ -372,7 +370,6 @@ public:
         if(curr_Token -> get_token_string()!= "end"){
             fprintf(stderr, "Expected end");
         }
-        fprintf(stderr, "\nParsed block statement ");
 
         get_next_token(); // cosume end
         return new StatementBlockAST(StatementList);
@@ -380,6 +377,33 @@ public:
 
     StatementAST* ParseCallStatement(){
 
+        if(curr_Token -> get_token_string() != "call") {
+            fprintf(stderr, "Expected call");
+            return nullptr;
+        }
+
+        return (StatementAST*)ParseIdentifierExpr();
+    }
+    StatementAST* ParseVarDecStatement(){
+        get_next_token(); //  Consume var
+
+        if(curr_Token -> get_token_type() != IDENTIFIER){
+            fprintf(stderr, "Expected variable identifier after var");
+            return nullptr;
+        }
+
+        VariableExprAST* newVar = (VariableExprAST*) ParseIdentifierExpr(); //Consume identifier
+
+        if(curr_Token -> get_token_string() != "="){
+            fprintf(stderr, "Expected = ");
+            return nullptr;
+        }
+        get_next_token(); //Parse  =
+
+        auto RHS = ParseExpression();
+        auto AssignStatement = new AssignmentStatementAST(newVar, RHS);
+
+        return new VariableDeclarationAST(newVar, AssignStatement );
     }
 
     StatementAST* ParseStatement() {
@@ -387,18 +411,41 @@ public:
        {
            case IDENTIFIER: return ParseAssignmentStatement();
            case KEYWORD:
-               if(curr_Token -> get_token_string() == "begin")
+               if(curr_Token -> get_token_string() == "begin") {
+                   fprintf(stderr, "\nParsing block statement");
                    return ParseBlockStatement();
-               else if(curr_Token -> get_token_string() == "if")
-                   return ParseIfStatement();
-               else if(curr_Token -> get_token_string() == "while")
-                   return ParseLoopStatement();
-               else if( curr_Token -> get_token_string() == "call")
-                    return ParseCallStatement();
-               else
-               {
-                   fprintf(stderr, "Could not recognize statement");
                }
+
+               else if(curr_Token -> get_token_string() == "if") {
+
+                   fprintf(stderr, "\nParsing if statement");
+                   return ParseIfStatement();
+               }
+
+               else if(curr_Token -> get_token_string() == "while"){
+                    fprintf(stderr, "\nParsing while statement");
+                   return ParseLoopStatement();
+               }
+
+               else if( curr_Token -> get_token_string() == "call") {
+                   fprintf(stderr, "\nParsing call statement");
+                   return ParseCallStatement();
+               }
+               else if(curr_Token -> get_token_string() == "var"){
+                   fprintf(stderr, "\nParsing variable declaration");
+                   return ParseVarDecStatement();
+               }
+
+               else {
+                   fprintf(stderr, "\nCould not recognize statement");
+               }
+               break;
+           case EOF:
+               fprintf(stderr, "Finished parsing");
+               break;
+           default:
+               fprintf(stderr, "Unexpected input" );
+               exit(0);
        }
     }
 
@@ -422,6 +469,9 @@ public:
         if(Result){
             Result->set_type("main_func");
             Result->print();
+            context.generateCode(Result->Body);
+
+            TopLevelNodes.push_back(Result);
             TopLevelNodes.push_back(Result);
             fprintf(stderr, "Parsed main \n");
         }

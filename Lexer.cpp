@@ -94,6 +94,7 @@ public:
     Lexer(std::string new_string)
     {
         S = new Scanner(new_string);
+	std::cout<<"Received "<<new_string;
 
     }
 
