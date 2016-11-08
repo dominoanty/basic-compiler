@@ -6,6 +6,7 @@
 #include <stack>
 #include <llvm/ADT/APFloat.h>
 #include <llvm/ADT/STLExtras.h>
+#include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DerivedTypes.h>
@@ -204,8 +205,12 @@ public:
               (*it)->print();
       }
     }
+    std::string getName(){
+        return Callee;
+    }
     Value* codegen(CodeGenContext &context);
 };
+
 
 class StatementBlockAST :  public StatementAST{
     std::vector<StatementAST*> Statements;
@@ -261,7 +266,7 @@ class ConditionalStatementAST : public  StatementAST{
       else
         Else->print();
     }
-    Value* codegen(CodeGenContext &context) {return nullptr;};
+    Value* codegen(CodeGenContext &context);
 };
 
 class LoopStatementAST : public StatementAST{
@@ -311,24 +316,38 @@ Value* BinaryExprAST::codegen(CodeGenContext &context){
     std::cout << "Creating binary operation " << Op << std::endl;
     Instruction::BinaryOps instr;
      if(Op == "+") {
-         instr = Instruction::Add;
+         instr = Instruction::FAdd;
     }
     else if(Op == "-") {
-         instr = Instruction::Sub;
+         instr = Instruction::FSub;
     }
     else if(Op == "/") {
-         instr = Instruction::SDiv;
+         instr = Instruction::FDiv;
     }
     else if(Op == "*") {
-         instr = Instruction::Mul;
+         instr = Instruction::FMul;
     }
+  /*  else if(Op == ">") {
+         instr = Instruction::FCmp;
+     } */
     else {
-         return NULL;
+         Instruction::OtherOps ins;
+         if(Op == ">"){
+             ins = Instruction::FCmp;
+             return FCmpInst::Create(ins, FCmpInst::FCMP_OGT, L, R, "", context.currentBlock());
+         }
+         else if(Op == "<"){
+             ins = Instruction::FCmp;
+             return FCmpInst::Create(ins, FCmpInst::FCMP_OLT,  L, R, "", context.currentBlock());
+         }
      }
-    return BinaryOperator::Create(instr, L,
-                                  R, "", context.currentBlock());
+    return BinaryOperator::Create(instr, L, R, "", context.currentBlock());
 }
 
+Value* ConditionalStatementAST::codegen(CodeGenContext &context) {
+    return this->Condition->codegen(context);
+
+}
 
 Value* CallExprAST::codegen(CodeGenContext &context){
     Function *CalleeF = context.module -> getFunction(this->Callee);
@@ -338,12 +357,13 @@ Value* CallExprAST::codegen(CodeGenContext &context){
     }
 
     std::vector<Value*> ArgsV;
-    for(unsigned i=0, len = this->Args.size(); i!=len; i++){
-        ArgsV.push_back(Args[i]->codegen(context));
-        if(!ArgsV.back())
-            return nullptr;
+    std::vector<ExprAST*>::const_iterator it;
+    for (it = Args.begin(); it != Args.end(); it++) {
+        ArgsV.push_back((*it)->codegen(context));
     }
-    return Builder.CreateCall(CalleeF, ArgsV, "call_func");
+    CallInst *call = CallInst::Create(CalleeF, ArgsV, "", context.currentBlock());
+    std::cout << "Creating method call: " << this->getName() << std::endl;
+    return call;
 }
 
 
@@ -354,7 +374,7 @@ Function* FunctionAST::codegen(CodeGenContext &context){
         argTypes.push_back(Type::getDoubleTy(globalContext));
     }
     ArrayRef<Type*> newRef(argTypes);
-    FunctionType *FT = FunctionType::get(Type::getDoubleTy(globalContext), newRef, false);
+    FunctionType *FT = FunctionType::get(Type::getVoidTy(globalContext), newRef, false);
     Function *TheFunction = Function::Create(FT, GlobalValue::InternalLinkage, this->Proto->getName(), context.module);
     BasicBlock *BB = BasicBlock::Create(globalContext, "entry", TheFunction);
 
@@ -370,9 +390,10 @@ Function* FunctionAST::codegen(CodeGenContext &context){
     for(it2 = this->Proto->Args.begin(); it2!= Proto->Args.end(); it2++){
         (**it2).codegen(context);
     }
-    Body->codegen(context);
 
-    ReturnInst::Create(globalContext, BB);
+    Body->codegen(context);
+    //Builder.CreateRet();
+    ReturnInst::Create(globalContext,   BB);
     context.popBlock();
     std::cout<<"Creating function";
     return TheFunction;

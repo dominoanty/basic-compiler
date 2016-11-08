@@ -375,14 +375,18 @@ public:
         return new StatementBlockAST(StatementList);
     }
 
-    StatementAST* ParseCallStatement(){
+    CallExprAST* ParseCallStatement(){
 
         if(curr_Token -> get_token_string() != "call") {
             fprintf(stderr, "Expected call");
             return nullptr;
         }
 
-        return (StatementAST*)ParseIdentifierExpr();
+        get_next_token(); //consume call
+
+        CallExprAST* Result = (CallExprAST*) ParseIdentifierExpr();
+
+        return Result;
     }
     StatementAST* ParseVarDecStatement(){
         get_next_token(); //  Consume var
@@ -442,6 +446,7 @@ public:
                break;
            case EOF:
                fprintf(stderr, "Finished parsing");
+               return nullptr;
                break;
            default:
                fprintf(stderr, "Unexpected input" );
@@ -455,6 +460,7 @@ public:
        if(Result){
            Result->set_type("func_def");
            Result->print();
+           Result->codegen(context);
            TopLevelNodes.push_back(Result);
            fprintf(stderr, "Parsed a function definiton\n");
        }
