@@ -1,5 +1,7 @@
 #include <string>
 #include <iostream>
+#include <fstream>
+
 #define EOF_TOKEN -1
 #define IDENTIFIER -2
 #define KEYWORD -3
@@ -17,8 +19,7 @@ public:
 
     Token(std::string token_string, int token_type)
             : token_string(token_string), token_type(token_type) {
-        if(token_type == NUMBER)
-        {
+        if (token_type == NUMBER) {
             token_val = std::stod(token_string);
         }
     }
@@ -94,7 +95,6 @@ public:
     Lexer(std::string new_string)
     {
         S = new Scanner(new_string);
-	std::cout<<"Received "<<new_string;
 
     }
 

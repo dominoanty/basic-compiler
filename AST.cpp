@@ -172,7 +172,7 @@ class VariableDeclarationAST : public StatementAST{
 public:
     VariableDeclarationAST(VariableExprAST* id, AssignmentStatementAST* assignExpr):
             id(id), assignExpr(assignExpr) {}
-    VariableDeclarationAST(VariableExprAST* id) : id(id) {};
+    VariableDeclarationAST(VariableExprAST* id) : id(id) {assignExpr = nullptr;};
     Value* codegen(CodeGenContext &context);
 };
 class PrototypeAST {
@@ -289,7 +289,7 @@ class LoopStatementAST : public StatementAST{
           LoopStatements->print();
 
     }
-    Value* codegen(CodeGenContext &context) {return nullptr;};
+    Value* codegen(CodeGenContext &context) ;
 };
 
 Value* NumberExprAST::codegen(CodeGenContext &context){
@@ -340,15 +340,148 @@ Value* BinaryExprAST::codegen(CodeGenContext &context){
              ins = Instruction::FCmp;
              return FCmpInst::Create(ins, FCmpInst::FCMP_OLT,  L, R, "", context.currentBlock());
          }
+         else if(Op == "<="){
+             ins = Instruction::FCmp;
+             return FCmpInst::Create(ins, FCmpInst::FCMP_OLE,  L, R, "", context.currentBlock());
+         }
+         else if(Op == ">="){
+             ins = Instruction::FCmp;
+             return FCmpInst::Create(ins, FCmpInst::FCMP_OGE,  L, R, "", context.currentBlock());
+         }
      }
     return BinaryOperator::Create(instr, L, R, "", context.currentBlock());
 }
 
+/*
+
 Value* ConditionalStatementAST::codegen(CodeGenContext &context) {
-    return this->Condition->codegen(context);
+    Inst
+    Function* parentFunction = Builder.GetInsertBlock()->getParent();
+
+    BasicBlock *thenBB = BasicBlock::Create(globalContext, "then", parentFunction);
+    BasicBlock *elseBB = BasicBlock::Create(globalContext, "else");
+    BasicBlock *mergeBB = BasicBlock::Create(globalContext, "ifcont");
+
+    Builder.CreateCondBr(this->Condition->codegen(context), thenBB, elseBB);
+
+
+    Builder.SetInsertPoint(thenBB);
+
+    Value* thenV = Then->codegen(context);
+    if(thenV == 0) return 0;
+    Builder.CreateBr(mergeBB);
+    thenBB = Builder.GetInsertBlock();
+
+    parentFunction->getBasicBlockList().push_back(elseBB);
+    Builder.SetInsertPoint(elseBB);
+
+    Value* elseV = Else->codegen(context);
+    if(elseV == 0) return 0;
+    Builder.CreateBr(mergeBB);
+    elseBB = Builder.GetInsertBlock();
+
+    parentFunction->getBasicBlockList().push_back(mergeBB);
+    Builder.SetInsertPoint(mergeBB);
+    PHINode *PN = Builder.CreatePHI(Type::getDoubleTy(globalContext), 2, "iftmp");
+    PN->addIncoming(thenV, thenBB);
+    PN->addIncoming(elseV, elseBB);
+    return PN;
+
+}
+ */
+/*Value* ConditionalStatementAST::codegen(CodeGenContext &context) {
+
+     std::cout << "Creating if statement " << std::endl;
+
+     Value *condValue = this->Condition->codegen(context);
+     if (condValue == nullptr) return nullptr;
+     std::cout << condValue->getType()->getTypeID() << std::endl;
+
+     Function *function = context.currentBlock()->getParent();
+
+     BasicBlock *thenBlock = BasicBlock::Create(globalContext,"if.then", function);
+     BasicBlock *elseBlock = BasicBlock::Create(globalContext,"if.else");
+     BasicBlock *mergeBlock = BasicBlock::Create(globalContext,"if.cont");
+
+
+     BranchInst::Create(thenBlock, elseBlock, condValue,context.currentBlock());
+
+     // create then block
+     Value *thenValue = this->Then->codegen(context);
+     if (thenValue == nullptr) return nullptr;
+     BranchInst::Create(mergeBlock, context.currentBlock());
+
+
+     // create else block
+    function->getBasicBlockList().push_back(elseBlock);
+     Value *elseValue = this->Else->codegen(context);
+    if (elseValue == nullptr) return nullptr;
+    BranchInst::Create(mergeBlock, context.currentBlock());
+
+     // create PHI node
+
+    function->getBasicBlockList().push_back(mergeBlock);
+    PHINode *PN = PHINode::Create(Type::getVoidTy(globalContext), 2, "", mergeBlock);
+
+    PN->addIncoming(thenValue, thenBlock);
+    if(Else)
+        PN->addIncoming(elseValue, elseBlock);
+
+    return PN;
+}*/
+
+Value* ConditionalStatementAST::codegen(CodeGenContext &context) {
+    BasicBlock *previousBasicBlock = context.currentBlock();
+    Value* condValue = this->Condition->codegen(context);
+
+    BasicBlock* thenBasicBlock =
+            BasicBlock::Create(globalContext, "if.then",
+                               context.currentBlock()->getParent());
+    context.pushBlock(thenBasicBlock);
+    Then->codegen(context);
+
+    BasicBlock *elseBasicBlock;
+    if(Else){
+        elseBasicBlock = BasicBlock::Create(globalContext, "if.else",
+                                             context.currentBlock()->getParent());
+        context.pushBlock(elseBasicBlock);
+        Else->codegen(context);
+
+    }
+    BasicBlock *mergeBasicBlock = BasicBlock::Create(globalContext, "if.cont",
+                                                     context.currentBlock()->getParent());
+    context.pushBlock(mergeBasicBlock);
+
+    if(thenBasicBlock->getTerminator() == NULL)
+        BranchInst::Create(mergeBasicBlock, thenBasicBlock);
+    if(Else){
+        if(elseBasicBlock->getTerminator() == NULL)
+            BranchInst::Create(mergeBasicBlock, elseBasicBlock);
+        return BranchInst::Create(thenBasicBlock, elseBasicBlock, condValue, previousBasicBlock);
+    } else
+        return BranchInst::Create(thenBasicBlock,mergeBasicBlock, condValue, previousBasicBlock);
 
 }
 
+Value* LoopStatementAST::codegen(CodeGenContext &context) {
+
+    BasicBlock *bodyBlock = BasicBlock::Create(globalContext, "while.body", context.currentBlock()->getParent());
+    BasicBlock *mergeBlock = BasicBlock::Create(globalContext, "while.cont", context.currentBlock()->getParent());
+
+    Value* condValue = this->Condition->codegen(context);
+    if(condValue == NULL){
+        fprintf(stderr, "Error generating condition value");
+        return nullptr;
+    }
+    context.pushBlock(bodyBlock);
+    BranchInst::Create(bodyBlock, mergeBlock, condValue, context.currentBlock());
+    this->LoopStatements->codegen(context);
+
+    condValue = Condition->codegen(context);
+    BranchInst *lastBranch = BranchInst::Create(bodyBlock, mergeBlock, condValue, bodyBlock);
+    return lastBranch;
+
+}
 Value* CallExprAST::codegen(CodeGenContext &context){
     Function *CalleeF = context.module -> getFunction(this->Callee);
     if(Callee.empty()){
@@ -411,7 +544,7 @@ Value* VariableDeclarationAST::codegen(CodeGenContext &context){
     std::cout << "Creating variable declaration "  << this->id->getName() << std::endl;
     AllocaInst *alloc = new AllocaInst(Type::getDoubleTy(globalContext), id->getName().c_str(), context.currentBlock());
     context.topBlock()->locals[id->getName()] = alloc;
-    if (this->assignExpr != NULL) {
+    if (this->assignExpr != nullptr) {
         assignExpr->codegen(context);
     }
     return alloc;

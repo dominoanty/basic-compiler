@@ -1,12 +1,12 @@
 def foo(x,y)
 begin
-var z=2
-var n=z+x
+var z=x+y
 end
 begin
-var x=2
-var y=3
-if(x>y)then
+var x=1
+if(x>0) then
 var z=2
-call foo(2,3)
+else
+var n=3
 end
+

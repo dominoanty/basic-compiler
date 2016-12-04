@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <fstream>
 #include "Lexer.cpp"
 #include "AST.cpp"
 
@@ -8,18 +9,43 @@ class Parser{
     Token *curr_Token;
     std::vector<Node*> TopLevelNodes;
     CodeGenContext context;
-
+    std::fstream lex_out;
 
 public:
 
     Parser(std::string input_string){
         L = new Lexer(input_string);
         curr_Token = L->get_token();
+        lex_out.open("lex.out");
+        lex_out<<"\nReceived String : ";
+        lex_out<<input_string;
+    }
+    ~Parser(){
+        lex_out.close();
+    }
+    void print_curr_token(){
+        lex_out<<std::endl;
+        lex_out<<curr_Token->get_token_string();
+        switch(curr_Token->get_token_type())
+        {
+            case  EOF_TOKEN : lex_out<<"EOF_TOKEN"; break;
+            case  IDENTIFIER : lex_out<<"IDENTIFIER"; break;
+            case  KEYWORD : lex_out<<"KEYWORD"; break;
+            case  NUMBER : lex_out<<"NUMBER"; break;
+            case  SYMBOL : lex_out<<"SYMBOL"; break;
+            case  CONDITIONAL : lex_out<<"CONDITIONAL"; break;
+
+            default:
+                lex_out<<"UNRECOGNIZED";
+                break;
+        }
     }
     void get_next_token()
     {
         if(curr_Token->get_token_type() != EOF_TOKEN)
             curr_Token = L->get_token();
+        print_curr_token();
+
     }
 
     //Parse Numbers and eat the corresponding token
