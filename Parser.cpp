@@ -1,25 +1,59 @@
 #include <iostream>
 #include <string>
+#include <fstream>
 #include "Lexer.cpp"
 #include "AST.cpp"
+#include <cstdlib>
 
 class Parser{
     Lexer *L;
     Token *curr_Token;
     std::vector<Node*> TopLevelNodes;
     CodeGenContext context;
-
+    std::ofstream lex_out;
+    std::ofstream parse_out;
+    FILE* parse_o;
 
 public:
 
     Parser(std::string input_string){
         L = new Lexer(input_string);
         curr_Token = L->get_token();
+        lex_out.open("lex.out", std::ios::out);
+        lex_out<<"\nReceived String : ";
+        lex_out<<input_string;
+        parse_o = fopen("parse.out", "w");
+
+        lex_out<<"\nSomething atleast";
+
+    }
+    ~Parser(){
+        parse_out.close();
+        lex_out.close();
+    }
+    void print_curr_token(){
+        lex_out<<std::endl;
+        lex_out<<curr_Token->get_token_string();
+        switch(curr_Token->get_token_type())
+        {
+            case  EOF_TOKEN : lex_out<<"  EOF_TOKEN"; break;
+            case  IDENTIFIER : lex_out<<"  IDENTIFIER"; break;
+            case  KEYWORD : lex_out<<"  KEYWORD"; break;
+            case  NUMBER : lex_out<<"  NUMBER"; break;
+            case  SYMBOL : lex_out<<"  SYMBOL"; break;
+            case  CONDITIONAL : lex_out<<"  CONDITIONAL"; break;
+
+            default:
+                lex_out<<"  UNRECOGNIZED";
+                break;
+        }
     }
     void get_next_token()
     {
         if(curr_Token->get_token_type() != EOF_TOKEN)
             curr_Token = L->get_token();
+        print_curr_token();
+
     }
 
     //Parse Numbers and eat the corresponding token
@@ -124,7 +158,6 @@ public:
             return nullptr;
 
         }
-       LHS->print();
         auto curr_expr_tree = new BinaryExprAST(" ", LHS, nullptr);
         auto Result = ParseTermDash(curr_expr_tree);
        return Result;
@@ -223,6 +256,11 @@ public:
          }
 
         get_next_token(); // consume )
+         if(curr_Token -> get_token_string() != ";") {
+             fprintf(stderr, "\nExpected ;");
+         }
+        else
+        get_next_token(); // consume ;
         return new PrototypeAST(fnName, arguments);
     }
 
@@ -324,7 +362,7 @@ public:
 
         StatementAST* ThenStatement;
         ThenStatement = ParseStatement();
-        fprintf(stderr, "\nParsed do statement");
+        fprintf(parse_o, "\nParsed do-while loop statement");
 
         return new LoopStatementAST(Condition, ThenStatement);
 
@@ -368,17 +406,21 @@ public:
         }
 
         if(curr_Token -> get_token_string()!= "end"){
-            fprintf(stderr, "Expected end");
+            fprintf(stderr, "\nExpected end");
         }
 
         get_next_token(); // cosume end
+
+        if(curr_Token->get_token_string() != ";"){
+
+        }
         return new StatementBlockAST(StatementList);
     }
 
     CallExprAST* ParseCallStatement(){
 
         if(curr_Token -> get_token_string() != "call") {
-            fprintf(stderr, "Expected call");
+            fprintf(stderr, "\nExpected call");
             return nullptr;
         }
 
@@ -392,14 +434,14 @@ public:
         get_next_token(); //  Consume var
 
         if(curr_Token -> get_token_type() != IDENTIFIER){
-            fprintf(stderr, "Expected variable identifier after var");
+            fprintf(stderr, "\nExpected variable identifier after var");
             return nullptr;
         }
 
         VariableExprAST* newVar = (VariableExprAST*) ParseIdentifierExpr(); //Consume identifier
 
         if(curr_Token -> get_token_string() != "="){
-            fprintf(stderr, "Expected = ");
+            fprintf(stderr, "\nExpected = ");
             return nullptr;
         }
         get_next_token(); //Parse  =
@@ -409,49 +451,67 @@ public:
 
         return new VariableDeclarationAST(newVar, AssignStatement );
     }
-
+    StatementAST* ParsePrintStatement(){
+        get_next_token(); //consume print
+        if( auto E = ParseExpression()){
+            return new PrintStatementAST(E);
+        };
+        return nullptr;
+    }
     StatementAST* ParseStatement() {
+        StatementAST* retStatement;
        switch(curr_Token -> get_token_type())
        {
-           case IDENTIFIER: return ParseAssignmentStatement();
+           case IDENTIFIER: retStatement =  ParseAssignmentStatement();
            case KEYWORD:
                if(curr_Token -> get_token_string() == "begin") {
-                   fprintf(stderr, "\nParsing block statement");
-                   return ParseBlockStatement();
+                   fprintf(parse_o, "\nParsing block statement");
+                   retStatement =  ParseBlockStatement();
                }
 
                else if(curr_Token -> get_token_string() == "if") {
 
-                   fprintf(stderr, "\nParsing if statement");
-                   return ParseIfStatement();
+                   fprintf(parse_o, "\nParsing if statement");
+                   retStatement =  ParseIfStatement();
                }
 
                else if(curr_Token -> get_token_string() == "while"){
-                    fprintf(stderr, "\nParsing while statement");
-                   return ParseLoopStatement();
+                   fprintf(parse_o, "\nParsing while statement");
+                   retStatement =  ParseLoopStatement();
                }
 
                else if( curr_Token -> get_token_string() == "call") {
-                   fprintf(stderr, "\nParsing call statement");
-                   return ParseCallStatement();
+                   fprintf(parse_o, "\nParsing call statement");
+                   retStatement =  ParseCallStatement();
                }
                else if(curr_Token -> get_token_string() == "var"){
-                   fprintf(stderr, "\nParsing variable declaration");
-                   return ParseVarDecStatement();
+                   fprintf(parse_o, "\nParsing variable declaration");
+                   retStatement =  ParseVarDecStatement();
                }
-
+               else if(curr_Token -> get_token_string() == "out"){
+                   fprintf(parse_o, "\nPrinting statement");
+                   retStatement =  ParsePrintStatement();
+               }
                else {
-                   fprintf(stderr, "\nCould not recognize statement");
+                   fprintf(parse_o, "\nCould not recognize statement");
                }
                break;
            case EOF:
-               fprintf(stderr, "Finished parsing");
-               return nullptr;
+               fprintf(parse_o, "Finished parsing");
+               retStatement =  nullptr;
                break;
            default:
                fprintf(stderr, "Unexpected input" );
                exit(0);
        }
+        if(curr_Token->get_token_string() != ";"){
+            fprintf(stderr, "\nExpected ;");
+        }
+        else{
+
+            get_next_token(); //consume ;
+        }
+        return retStatement;
     }
 
 
@@ -459,10 +519,9 @@ public:
        FunctionAST* Result = (FunctionAST*) ParseDefinition();
        if(Result){
            Result->set_type("func_def");
-           Result->print();
-           Result->codegen(context);
+           Result->addToContext(context);
            TopLevelNodes.push_back(Result);
-           fprintf(stderr, "Parsed a function definiton\n");
+           fprintf(parse_o, "\nParsed a function definiton\n");
        }
        else
        {
@@ -474,12 +533,11 @@ public:
         FunctionAST* Result = (FunctionAST*) ParseTopLevelStatement();
         if(Result){
             Result->set_type("main_func");
-            Result->print();
             context.generateCode(Result->Body);
 
             TopLevelNodes.push_back(Result);
             TopLevelNodes.push_back(Result);
-            fprintf(stderr, "Parsed main \n");
+            fprintf(parse_o, "\nParsed main \n");
         }
         else
         {
@@ -496,7 +554,7 @@ public:
                 case EOF_TOKEN:
                     return;
                 case KEYWORD:
-                    if(curr_Token ->get_token_string() == "def")
+                    if(curr_Token ->get_token_string() == "procedure")
                         HandleDefinition();
                     else if(curr_Token -> get_token_string() == "begin")
                         HandleMain();

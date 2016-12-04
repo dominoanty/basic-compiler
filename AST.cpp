@@ -3,51 +3,38 @@
 //
 #include <iostream>
 #include <vector>
+#include <map>
 #include <stack>
-#include <llvm/ADT/APFloat.h>
-#include <llvm/ADT/STLExtras.h>
-#include <llvm/IR/InstrTypes.h>
-#include <llvm/IR/BasicBlock.h>
-#include <llvm/IR/Constants.h>
-#include <llvm/IR/DerivedTypes.h>
-#include <llvm/IR/Function.h>
-#include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Module.h>
-#include <llvm/IR/Type.h>
-#include <llvm/IR/Verifier.h>
-#include <llvm/ExecutionEngine/GenericValue.h>
+#include <fstream>
 
-using namespace llvm;
+union Value{
+    double Number;
+};
 
-static LLVMContext globalContext;
-static IRBuilder<> Builder(globalContext);
-
+class FunctionAST;
 class StatementBlockAST;
-
 class CodeGenBlock{
 public:
-    BasicBlock *block;
-    std::map<std::string, Value*> locals;
-
+    std::map<std::string, double> locals;
 };
 
 class CodeGenContext{
     std::stack<CodeGenBlock*> blocks;
-    Function* mainFunction;
 
 public:
-    Module* module;
+    std::fstream gen_out;
+    std::map<std::string, FunctionAST*> functionList;
     CodeGenContext(){
-        module = new Module("main", globalContext);
+        gen_out.open("gen.out", std::ios::out);
     }
-    void generateCode(StatementBlockAST* root);
-    GenericValue runCode();
-    std::map<std::string, Value*> locals(){ return blocks.top()->locals;};
-    BasicBlock *currentBlock() { return blocks.top()->block;}
-    void pushBlock(BasicBlock *block){ blocks.push(new CodeGenBlock()); blocks.top()->block = block;}
+    ~CodeGenContext(){
+        gen_out.close();
+    }
+    std::map<std::string, double> locals(){ return blocks.top()->locals;};
+    void pushBlock(){ blocks.push(new CodeGenBlock()); }
     void popBlock() { CodeGenBlock* top = blocks.top(); blocks.pop(); delete top; }
     CodeGenBlock* topBlock() {return blocks.top();}
+    void generateCode(StatementBlockAST* root);
 
 };
 
@@ -55,20 +42,14 @@ class Node{
     std::string node_type;
 public:
     virtual ~Node(){}
-    virtual void print(){
-        std::cout<<"Blank node";
-    }
     virtual void set_type(std::string Type) { this->node_type = Type;};
-    virtual Value *codegen(CodeGenContext &context) = 0;
+    virtual double eval(CodeGenContext &context)=0;
 };
 
 class ExprAST {
     public:
     virtual ~ExprAST(){}
-    virtual void print(){
-        std::cout<<"Blank expression";
-    }
-    virtual Value *codegen(CodeGenContext &context) = 0;
+    virtual double eval(CodeGenContext &context) = 0;
 };
 
 class NumberExprAST : public ExprAST{
@@ -76,10 +57,11 @@ class NumberExprAST : public ExprAST{
 
     public:
     NumberExprAST(double val) : Val(val) {}
-    void print(){
-        std::cout<<Val;
+
+    double eval(CodeGenContext &context){
+        context.gen_out<<"\nthe number"<<Val;
+        return Val;
     }
-    Value* codegen(CodeGenContext &context);
 };
 
 class VariableExprAST : public ExprAST{
@@ -88,10 +70,18 @@ class VariableExprAST : public ExprAST{
     public:
     VariableExprAST(std::string name) : Name(name) {}
     std::string getName(){return Name;}
-    void print(){
-        std::cout<<Name;
+
+    double eval(CodeGenContext &context){
+        if(context.locals().find(Name) == context.locals().end())
+        {
+            context.gen_out<<"\nUndeclared variable "<<Name;
+            fprintf(stderr, "Undeclared variable ");
+            return 0;
+        }
+        context.gen_out<<"\nthe variable "<<Name;
+        return context.locals()[Name];
     }
-    Value* codegen(CodeGenContext &context);
+
 };
 class BinaryExprAST : public ExprAST {
     std::string Op;
@@ -119,29 +109,52 @@ class BinaryExprAST : public ExprAST {
     {
         return this->LHS;
     }
-    void print(){
-        std::cout<<"\nLHS is "; 
-        if(!LHS)
-          std::cout<<"null";
-        else
-          LHS->print();
 
-        std::cout<<", operator is "<<Op;
-
-        std::cout<<"\nRHS is "; 
-        if(!RHS)
-          std::cout<<"null";
-        else
-          RHS->print();
+    double eval(CodeGenContext &context){
+        double L = LHS->eval(context);
+        double R = RHS->eval(context);
+        context.gen_out<<"\n the binary expression "<<L<<" "<<Op<<" "<<R;
+        if(Op == "+"){
+            return L+R;
+        }
+        else if(Op == "+"){
+            return L+R;
+        }
+        else if(Op == "-"){
+            return L-R;
+        }
+        else if(Op == "*"){
+            return L*R;
+        }
+        else if(Op == "/"){
+            if(R == 0)
+            {
+                context.gen_out<<"\nError : Zero Division Error.";
+                fprintf(stderr, "Zero division error");
+                return 0;
+            }
+            return L/R;
+        }
+        else if(Op == ">="){
+            return L>=R;
+        }
+        else if(Op == "<="){
+            return L<=R;
+        }
+        else if(Op == ">"){
+            return L>R;
+        }
+        else if(Op == "<"){
+            return L<R;
+        }
+        return 0;
     }
 
-    Value* codegen(CodeGenContext &context);
 };
 
 class StatementAST : public Node{
     public:
     StatementAST(){}
-    virtual void print(){std::cout<<"Blank statement";}
 };
 
 class AssignmentStatementAST : public StatementAST{
@@ -150,20 +163,19 @@ class AssignmentStatementAST : public StatementAST{
     public:
     AssignmentStatementAST(VariableExprAST* LValue, ExprAST* RValue) :
             LValue(LValue), RValue(RValue) {};
-    void print(){
-      std::cout<<"\nLvalue is";
-      if(!LValue)
-        std::cout<<"null";
-      else
-        LValue->print();
-
-      std::cout<<"Rvalue is";
-      if(!RValue)
-        std::cout<<"null";
-      else
-        RValue->print();
+    double eval(CodeGenContext &context){
+        double R = RValue->eval(context);
+        std::string LName = LValue->getName();
+        if(context.topBlock()->locals.find(LName) == context.topBlock()->locals.end())
+        {
+            context.gen_out<<"\nError : Variable "<<LName<<" has not been declared in the scope.";
+            fprintf(stderr, "Error variable not declared");
+            return 0;
+        }
+        context.gen_out<<"\n the assignment "<<LName<<" = "<<R;
+        context.topBlock()->locals[LName] = R;
+        return R;
     }
-    Value* codegen(CodeGenContext &context);
 };
 
 class VariableDeclarationAST : public StatementAST{
@@ -172,8 +184,23 @@ class VariableDeclarationAST : public StatementAST{
 public:
     VariableDeclarationAST(VariableExprAST* id, AssignmentStatementAST* assignExpr):
             id(id), assignExpr(assignExpr) {}
-    VariableDeclarationAST(VariableExprAST* id) : id(id) {};
-    Value* codegen(CodeGenContext &context);
+    VariableDeclarationAST(VariableExprAST* id) : id(id) {assignExpr= nullptr; };
+    double eval(CodeGenContext &context){
+        std::string LName = id->getName();
+        context.topBlock()->locals[LName] = 0;
+        if(assignExpr != nullptr){
+            double R = assignExpr->eval(context);
+            context.topBlock()->locals[LName] = R;
+            return R;
+        }
+        return 0;
+    }
+    double eval(CodeGenContext &context, double initVal){
+        context.gen_out<<"\n Created variable" << id->getName();
+        std::string LName = id->getName();
+        context.topBlock()->locals[LName] = initVal;
+        return initVal;
+    }
 };
 class PrototypeAST {
     std::string Name;
@@ -188,6 +215,20 @@ public:
     }
 };
 
+class PrintStatementAST : public StatementAST{
+    ExprAST* Var;
+
+public:
+    PrintStatementAST(ExprAST* Var) : Var(Var) {};
+
+    double eval(CodeGenContext &context){
+        context.gen_out<<"\n print statement";
+        double R = Var->eval(context);
+        fprintf(stderr, "\n%f\n", R);
+        return R;
+    }
+};
+
 class CallExprAST : public ExprAST ,public StatementAST{
     std::string Callee;
     std::vector<ExprAST*> Args;
@@ -197,18 +238,10 @@ public:
     CallExprAST(const std::string &Callee,
                 std::vector<ExprAST*> Args)
             : Callee(Callee), Args(Args) {}
-    void print(){
-      std::cout<<"\nCallee is "<<Callee;
-      for(std::vector<ExprAST*>::iterator it= Args.begin();
-          it!=Args.end(); ++it){
-          if((*it) != nullptr)
-              (*it)->print();
-      }
-    }
     std::string getName(){
         return Callee;
     }
-    Value* codegen(CodeGenContext &context);
+    double eval(CodeGenContext &context);
 };
 
 
@@ -217,14 +250,7 @@ class StatementBlockAST :  public StatementAST{
 
     public:
     StatementBlockAST(std::vector<StatementAST*> Statements) : Statements(Statements){}
-    void print(){
-       for(std::vector<StatementAST*>::iterator it= Statements.begin();
-          it!=Statements.end(); ++it){
-          if((*it) != nullptr)
-              (*it)->print();
-      }
-    }
-    Value* codegen(CodeGenContext &context) ;
+    double eval(CodeGenContext &context) ;
 };
 class FunctionAST : public Node{
     PrototypeAST* Proto;
@@ -233,10 +259,11 @@ public:
     StatementBlockAST* Body;
     FunctionAST(PrototypeAST* Proto,
                 StatementBlockAST* Body) : Proto(Proto), Body(Body) {}
-    void print(){
-        Body->print();
+    double eval(CodeGenContext &context){return 0;}
+    double eval(CodeGenContext &context, std::vector<ExprAST*>);
+    void addToContext(CodeGenContext &context){
+        context.functionList[this->Proto->getName()] = this;
     }
-    Function* codegen(CodeGenContext &context);
 };
 
 
@@ -250,23 +277,8 @@ class ConditionalStatementAST : public  StatementAST{
                             StatementAST* Then,
                             StatementAST* Else) :
                             Condition(Condition), Then(Then), Else(Else) {};
-    void print(){
-      if(!Condition)
-        std::cout<<"\nNo condition";
-      else
-        Condition->print();
 
-      if(!Then)
-        std::cout<<"\nNo then statement";
-      else
-        Then->print();
-
-      if(!Else)
-        std::cout<<"\nNo else statement";
-      else
-        Else->print();
-    }
-    Value* codegen(CodeGenContext &context);
+    double eval(CodeGenContext &context);
 };
 
 class LoopStatementAST : public StatementAST{
@@ -277,170 +289,84 @@ class LoopStatementAST : public StatementAST{
     LoopStatementAST(BinaryExprAST* Condition, StatementAST* LoopStatements) :
             Condition(Condition), LoopStatements(LoopStatements){};
 
-    void print(){
-        if(!Condition)
-          std::cout<<"\nNo condition statement";
-        else
-          Condition->print();
 
-        if(!LoopStatements)
-          std::cout<<"\nNo loop statements";
-        else
-          LoopStatements->print();
-
-    }
-    Value* codegen(CodeGenContext &context) {return nullptr;};
+    double eval(CodeGenContext &context) ;
 };
 
-Value* NumberExprAST::codegen(CodeGenContext &context){
-    std::cout<<"Creating integer : "<< this->Val << std::endl;
-    return ConstantFP::get(Type::getDoubleTy(globalContext), this->Val);
-}
-Value* VariableExprAST::codegen(CodeGenContext &context){
-    std::cout<<" Creating identifier ref" << this->Name << std::endl;
-    if (context.locals().find(this->Name) == context.locals().end()) {
-        std::cerr << "undeclared variable " << this->Name << std::endl;
-        return NULL;
+double ConditionalStatementAST::eval(CodeGenContext &context) {
+    context.gen_out<<"\n for conditional statement\n";
+    double R;
+    if(this->Condition->eval(context)){
+        R = Then->eval(context);
     }
-    return new LoadInst(context.locals()[this->Name], "", false, context.currentBlock());
-}
-
-
-Value* BinaryExprAST::codegen(CodeGenContext &context){
-    Value *L = this->LHS->codegen(context);
-    Value *R = this->RHS->codegen(context);
-
-    if(!L || !R)
-        return nullptr;
-
-    std::cout << "Creating binary operation " << Op << std::endl;
-    Instruction::BinaryOps instr;
-     if(Op == "+") {
-         instr = Instruction::FAdd;
+    else{
+        if(Else != nullptr)
+         R = Else->eval(context);
     }
-    else if(Op == "-") {
-         instr = Instruction::FSub;
-    }
-    else if(Op == "/") {
-         instr = Instruction::FDiv;
-    }
-    else if(Op == "*") {
-         instr = Instruction::FMul;
-    }
-  /*  else if(Op == ">") {
-         instr = Instruction::FCmp;
-     } */
-    else {
-         Instruction::OtherOps ins;
-         if(Op == ">"){
-             ins = Instruction::FCmp;
-             return FCmpInst::Create(ins, FCmpInst::FCMP_OGT, L, R, "", context.currentBlock());
-         }
-         else if(Op == "<"){
-             ins = Instruction::FCmp;
-             return FCmpInst::Create(ins, FCmpInst::FCMP_OLT,  L, R, "", context.currentBlock());
-         }
-     }
-    return BinaryOperator::Create(instr, L, R, "", context.currentBlock());
+    return R;
 }
 
-Value* ConditionalStatementAST::codegen(CodeGenContext &context) {
-    return this->Condition->codegen(context);
-
+double LoopStatementAST::eval(CodeGenContext &context) {
+    context.gen_out<<"\n for loop statement \n";
+    double retVal;
+    while(this->Condition->eval(context)){
+       retVal =  this->LoopStatements->eval(context);
+    }
+    return retVal;
 }
 
-Value* CallExprAST::codegen(CodeGenContext &context){
-    Function *CalleeF = context.module -> getFunction(this->Callee);
-    if(Callee.empty()){
-        fprintf(stderr, "Unknown function referenced");
-        return nullptr;
+double CallExprAST::eval(CodeGenContext &context){
+    context.gen_out<<"\nfor function call statement \n";
+    if(context.functionList.find(this->Callee) == context.functionList.end()){
+        fprintf(stderr, "Function not defined ");
+        return 0;
     }
-
-    std::vector<Value*> ArgsV;
-    std::vector<ExprAST*>::const_iterator it;
-    for (it = Args.begin(); it != Args.end(); it++) {
-        ArgsV.push_back((*it)->codegen(context));
-    }
-    CallInst *call = CallInst::Create(CalleeF, ArgsV, "", context.currentBlock());
-    std::cout << "Creating method call: " << this->getName() << std::endl;
-    return call;
+    return context.functionList[Callee]->eval(context, this->Args);
 }
 
 
-Function* FunctionAST::codegen(CodeGenContext &context){
-    std::vector< Type*> argTypes;
-    auto it = Proto->Args.begin();
-    for(it; it != Proto->Args.end(); it++){
-        argTypes.push_back(Type::getDoubleTy(globalContext));
-    }
-    ArrayRef<Type*> newRef(argTypes);
-    FunctionType *FT = FunctionType::get(Type::getVoidTy(globalContext), newRef, false);
-    Function *TheFunction = Function::Create(FT, GlobalValue::InternalLinkage, this->Proto->getName(), context.module);
-    BasicBlock *BB = BasicBlock::Create(globalContext, "entry", TheFunction);
+double FunctionAST::eval(CodeGenContext &context, std::vector<ExprAST*> Args){
+   if(this->Proto->Args.size() != Args.size()){
+       fprintf(stderr, "Wrong number of arguments");
+       return 0;
+   }
+   double *evalArgs = new double[Args.size()];
+   std::vector<ExprAST*>::const_iterator it;
+    int i=0;
+   for( it = Args.begin() ; it != Args.end();i++, it++){
+       evalArgs[i] = (*it)->eval(context);
+   }
+    context.pushBlock();
 
-    if (!TheFunction)
-        return nullptr;
-
-    context.pushBlock(BB);
-
-    std::vector<VariableDeclarationAST*>::iterator it2;
-    // Record the function arguments in the NamedValues map.
-//    for (auto &Arg : TheFunction->args())
-//        NamedValues[Arg.getName()] = &Arg;
-    for(it2 = this->Proto->Args.begin(); it2!= Proto->Args.end(); it2++){
-        (**it2).codegen(context);
-    }
-
-    Body->codegen(context);
-    //Builder.CreateRet();
-    ReturnInst::Create(globalContext,   BB);
-    context.popBlock();
-    std::cout<<"Creating function";
-    return TheFunction;
+   std::vector<VariableDeclarationAST*>::const_iterator it2;
+   for(i=0, it2 = Proto->Args.begin(); it2 != Proto->Args.end(); it2++, i++){
+       (*it2)->eval(context, evalArgs[i]);
+   }
+   double retVal = this->Body->eval(context);
+   context.popBlock();
+   return retVal;
 }
 
-Value* AssignmentStatementAST::codegen(CodeGenContext &context) {
-    std::cout << "Creating assignment for " << this->LValue->getName() << std::endl;
-    if (context.locals().find(LValue->getName()) == context.locals().end()) {
-        std::cerr << "undeclared variable " << LValue->getName() << std::endl;
-        return NULL;
-    }
-    return new StoreInst(RValue->codegen(context), context.locals()[LValue->getName()], false, context.currentBlock());
-}
-Value* VariableDeclarationAST::codegen(CodeGenContext &context){
-    std::cout << "Creating variable declaration "  << this->id->getName() << std::endl;
-    AllocaInst *alloc = new AllocaInst(Type::getDoubleTy(globalContext), id->getName().c_str(), context.currentBlock());
-    context.topBlock()->locals[id->getName()] = alloc;
-    if (this->assignExpr != NULL) {
-        assignExpr->codegen(context);
-    }
-    return alloc;
-}
 
-Value* StatementBlockAST::codegen(CodeGenContext &context) {
+
+double StatementBlockAST::eval(CodeGenContext &context) {
     std::vector<StatementAST*>::const_iterator it;
-    Value* last = NULL;
+    double last = 0;
     for(it = this->Statements.begin(); it != this->Statements.end(); it++)
     {
-        std::cout<< "Generating code for"<< typeid(**it).name() << std::endl;
-        last = (**it).codegen(context);
+        context.gen_out<< "\nGenerating code for"<<  std::endl;
+        last = (**it).eval(context);
     }
     return last;
-}void CodeGenContext::generateCode(StatementBlockAST *root) {
-    std::cout<< " Generating code ";
+}
 
-    std::vector<llvm::Type*> argTypes;
-    ArrayRef<Type*> newRef(argTypes);
-    FunctionType *FT = FunctionType::get(Type::getVoidTy(globalContext), newRef, false);
-    mainFunction = Function::Create(FT, GlobalValue::InternalLinkage, "main", module);
-    BasicBlock *bblock = BasicBlock::Create(globalContext, "entry", mainFunction, 0);
+void CodeGenContext::generateCode(StatementBlockAST *root) {
+    gen_out<< "\n\n Generating code \n ";
 
-    pushBlock(bblock);
-    root->codegen(*this);
-    ReturnInst::Create(globalContext, bblock);
+    this->pushBlock();
+    root->eval(*this);
     popBlock();
 
-    std::cout<<"Code is generated";
-    module->dump();
+    gen_out<<"\n Finished generating code";
 }
 

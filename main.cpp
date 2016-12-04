@@ -15,12 +15,10 @@ int main()
 
     input_file.open("input.txt");
 
-    std::getline(input_file, input);
 
-    while(input != ""){
+    while(std::getline(input_file, input)){
         input_string += input;
-	input_string += " ";
-	std::getline(input_file, input);
+	    input_string += " ";
     }
 
     std::cout<<input_string;

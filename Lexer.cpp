@@ -1,5 +1,7 @@
 #include <string>
 #include <iostream>
+#include <fstream>
+
 #define EOF_TOKEN -1
 #define IDENTIFIER -2
 #define KEYWORD -3
@@ -17,8 +19,7 @@ public:
 
     Token(std::string token_string, int token_type)
             : token_string(token_string), token_type(token_type) {
-        if(token_type == NUMBER)
-        {
+        if (token_type == NUMBER) {
             token_val = std::stod(token_string);
         }
     }
@@ -94,7 +95,6 @@ public:
     Lexer(std::string new_string)
     {
         S = new Scanner(new_string);
-	std::cout<<"Received "<<new_string;
 
     }
 
@@ -120,7 +120,8 @@ public:
            test_string == "begin"     ||
            test_string == "end"       ||
            test_string == "call"      ||
-           test_string == "def" )
+           test_string == "out"
+           )
            return KEYWORD;
         return IDENTIFIER;
     }
@@ -129,6 +130,28 @@ public:
         std::string collected_string = "";
 
         char curr_char = S->get_char();
+
+        //Clear Whitespaces
+        while(isspace(curr_char))
+            curr_char = S->get_char();
+
+        //Don't comments
+        if(curr_char == '/'){
+            curr_char = S->get_char();
+            if(curr_char == '*'){
+                do{
+                    do
+                    {
+                        curr_char = S->get_char();
+                    }while(curr_char != '*' && curr_char != EOF_TOKEN);
+                    curr_char = S->get_char();
+                }while(curr_char != '/' && curr_char != EOF_TOKEN);
+                curr_char = S->get_char();
+            }
+            else{
+                S->rewind();
+            }
+        }
 
         //Clear Whitespaces
         while(isspace(curr_char))
@@ -177,6 +200,19 @@ public:
 
             return new Token(collected_string, CONDITIONAL);
         }
+
+        if(curr_char == '='){
+            collected_string+=curr_char;
+            curr_char = S->get_char();
+            if(curr_char == '='){
+                collected_string+=curr_char;
+                return new Token(collected_string, CONDITIONAL);
+            }
+            S->rewind();
+            collected_string="";
+            curr_char = '=';
+        }
+
 
         //If EOF, return an EOF token
         if(curr_char == EOF_TOKEN)
